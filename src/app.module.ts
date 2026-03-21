@@ -7,6 +7,7 @@ import { ModelVersionEntity } from './entities/model-version.entity';
 import { TrainingJobEntity } from './entities/training-job.entity';
 import { TrainingSampleEntity } from './entities/training-sample.entity';
 import { HerbClassesModule } from './herb-classes/herb-classes.module';
+import { InferModule } from './infer/infer.module';
 import { ModelsModule } from './models/models.module';
 import { SamplesModule } from './samples/samples.module';
 import { TrainingModule } from './training/training.module';
@@ -45,6 +46,7 @@ import { TrainingModule } from './training/training.module';
     }),
     SamplesModule,
     HerbClassesModule,
+    InferModule,
     ModelsModule,
     TrainingModule,
   ],

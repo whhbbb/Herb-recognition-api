@@ -9,5 +9,6 @@ import { HerbClassesService } from './herb-classes.service';
   imports: [SamplesModule, TypeOrmModule.forFeature([TrainingSampleEntity])],
   controllers: [HerbClassesController],
   providers: [HerbClassesService],
+  exports: [HerbClassesService],
 })
 export class HerbClassesModule {}
