@@ -60,6 +60,8 @@ npm run start
 ## 一键脚本（服务器）
 - 首次初始化：`bash scripts/server-init.sh`
 - 日常发布更新：`bash scripts/server-update.sh`
+- 训练环境初始化：`bash scripts/train-init.sh`
+- 启动训练：`bash scripts/train-run.sh 20 16 training/runs`
 
 ## 下一步建议
 - 将当前磁盘存储替换为阿里云 OSS（保留数据库结构不变，仅替换上传实现）。

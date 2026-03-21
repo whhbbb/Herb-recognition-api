@@ -27,19 +27,14 @@
 
 ```bash
 cd /www/wwwroot/Herb-recognition-api
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -r training/requirements.txt
+bash scripts/train-init.sh
 ```
 
 ### 2) 开始训练（读取 .env 中数据库）
 
 ```bash
 cd /www/wwwroot/Herb-recognition-api
-source .venv/bin/activate
-set -a; source .env; set +a
-python training/train_from_db.py --epochs 20 --batch-size 16 --output-dir training/runs
+bash scripts/train-run.sh 20 16 training/runs
 ```
 
 ### 3) 训练结果位置
