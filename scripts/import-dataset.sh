@@ -20,18 +20,6 @@ if [ ! -d "$ROOT_DIR" ]; then
   exit 1
 fi
 
-# 你当前系统内置的8类草药映射（目录名 -> herbId）
-declare -A ID_MAP=(
-  ["当归"]=1
-  ["人参"]=2
-  ["黄芪"]=3
-  ["川芎"]=4
-  ["甘草"]=5
-  ["白芍"]=6
-  ["茯苓"]=7
-  ["枸杞子"]=8
-)
-
 is_image_file() {
   local f="${1,,}"
   [[ "$f" == *.jpg || "$f" == *.jpeg || "$f" == *.png || "$f" == *.webp || "$f" == *.bmp ]]
@@ -48,12 +36,7 @@ while IFS= read -r -d '' file; do
   fi
 
   herb_name="$(basename "$(dirname "$file")")"
-  herb_id="${ID_MAP[$herb_name]:-}"
-
-  if [ -z "$herb_id" ]; then
-    SKIPPED=$((SKIPPED + 1))
-    continue
-  fi
+  herb_id="$herb_name"
 
   if curl -fsS -X POST "$API_BASE/samples/upload" \
     -F "file=@$file" \

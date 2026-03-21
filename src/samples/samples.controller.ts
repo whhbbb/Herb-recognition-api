@@ -74,4 +74,9 @@ export class SamplesController {
     const uploadDir = this.config.get<string>('UPLOAD_DIR', 'uploads');
     return { total, uploadDir };
   }
+
+  @Get('classes')
+  async classes() {
+    return this.samplesService.listClasses();
+  }
 }

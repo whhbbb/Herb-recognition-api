@@ -22,8 +22,9 @@ export class SamplesService {
     const relativePath = file.path.replace(join(process.cwd(), uploadDir), '').replace(/\\/g, '/');
     const fileUrl = `${baseUrl}/files${relativePath}`;
 
+    const herbId = dto.herbId?.trim() || dto.herbName.trim();
     const entity = this.samplesRepo.create({
-      herbId: dto.herbId,
+      herbId,
       herbName: dto.herbName,
       fileUrl,
       storageKey: file.path,
@@ -63,5 +64,23 @@ export class SamplesService {
 
   async countAll() {
     return this.samplesRepo.count();
+  }
+
+  async listClasses() {
+    const rows = await this.samplesRepo
+      .createQueryBuilder('sample')
+      .select('sample.herbId', 'herbId')
+      .addSelect('sample.herbName', 'herbName')
+      .addSelect('COUNT(sample.id)', 'count')
+      .groupBy('sample.herbId')
+      .addGroupBy('sample.herbName')
+      .orderBy('COUNT(sample.id)', 'DESC')
+      .getRawMany<{ herbId: string; herbName: string; count: string }>();
+
+    return rows.map((row) => ({
+      herbId: row.herbId,
+      herbName: row.herbName,
+      count: Number(row.count),
+    }));
   }
 }

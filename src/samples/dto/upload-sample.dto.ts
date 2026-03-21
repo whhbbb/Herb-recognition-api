@@ -1,9 +1,10 @@
 import { IsIn, IsOptional, IsString, Length } from 'class-validator';
 
 export class UploadSampleDto {
+  @IsOptional()
   @IsString()
   @Length(1, 64)
-  herbId!: string;
+  herbId?: string;
 
   @IsString()
   @Length(1, 128)
