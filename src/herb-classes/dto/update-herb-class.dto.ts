@@ -3,38 +3,39 @@ import { IsArray, IsOptional, IsString } from 'class-validator';
 export class UpdateHerbClassDto {
   @IsOptional()
   @IsString()
-  herbNameZh?: string;
+  name?: string;
 
   @IsOptional()
   @IsString()
-  pinyin?: string;
-
-  @IsOptional()
-  @IsString()
-  latinName?: string;
+  scientificName?: string;
 
   @IsOptional()
   @IsString()
   properties?: string;
 
   @IsOptional()
-  @IsString()
-  meridian?: string;
-
-  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  effects?: string[];
+  functions?: string[];
 
   @IsOptional()
   @IsString()
   usage?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  cautions?: string[];
+
+  @IsOptional()
   @IsString()
-  cautions?: string;
+  image?: string;
 
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
 }

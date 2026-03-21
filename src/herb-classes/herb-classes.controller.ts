@@ -11,6 +11,11 @@ export class HerbClassesController {
     return this.herbClassesService.list();
   }
 
+  @Get(':herbId')
+  async getOne(@Param('herbId') herbId: string) {
+    return this.herbClassesService.getOne(herbId);
+  }
+
   @Put(':herbId')
   async upsert(@Param('herbId') herbId: string, @Body() body: UpdateHerbClassDto) {
     return this.herbClassesService.upsert(herbId, body);

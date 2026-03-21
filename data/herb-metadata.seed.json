@@ -1,0 +1,106 @@
+[
+  {
+    "herbId": "当归",
+    "data": {
+      "name": "当归",
+      "scientificName": "Angelica sinensis",
+      "properties": "甘、辛，温",
+      "functions": ["补血调经", "活血止痛", "润肠通便"],
+      "usage": "煎服，6-12g",
+      "cautions": ["湿阻中满及大便溏泄者慎服"],
+      "description": "当归为伞形科植物当归的干燥根。",
+      "category": "补虚药"
+    }
+  },
+  {
+    "herbId": "人参",
+    "data": {
+      "name": "人参",
+      "scientificName": "Panax ginseng",
+      "properties": "甘、微苦，微温",
+      "functions": ["大补元气", "复脉固脱", "补脾益肺", "生津止渴", "安神益智"],
+      "usage": "煎服，3-9g；研粉吞服，1-3g",
+      "cautions": ["实证、热证而正气不虚者忌服"],
+      "description": "人参为五加科植物人参的干燥根和根茎。",
+      "category": "补虚药"
+    }
+  },
+  {
+    "herbId": "黄芪",
+    "data": {
+      "name": "黄芪",
+      "scientificName": "Astragalus membranaceus",
+      "properties": "甘，微温",
+      "functions": ["补气固表", "敛汗固脱", "利水消肿", "生津养血"],
+      "usage": "煎服，9-30g",
+      "cautions": ["实证及阴虚阳亢者慎服"],
+      "description": "黄芪为豆科植物蒙古黄芪或膜荚黄芪的干燥根。",
+      "category": "补虚药"
+    }
+  },
+  {
+    "herbId": "川芎",
+    "data": {
+      "name": "川芎",
+      "scientificName": "Ligusticum chuanxiong",
+      "properties": "辛，温",
+      "functions": ["活血行气", "祛风止痛"],
+      "usage": "煎服，3-10g",
+      "cautions": ["阴虚火旺者慎服"],
+      "description": "川芎为伞形科植物川芎的干燥根茎。",
+      "category": "活血化瘀药"
+    }
+  },
+  {
+    "herbId": "甘草",
+    "data": {
+      "name": "甘草",
+      "scientificName": "Glycyrrhiza uralensis",
+      "properties": "甘，平",
+      "functions": ["补脾益气", "清热解毒", "祛痰止咳", "缓急止痛", "调和诸药"],
+      "usage": "煎服，2-10g",
+      "cautions": ["不宜与京大戟、芫花、甘遂、海藻同用"],
+      "description": "甘草为豆科植物甘草、胀果甘草或光果甘草的干燥根和根茎。",
+      "category": "补虚药"
+    }
+  },
+  {
+    "herbId": "白芍",
+    "data": {
+      "name": "白芍",
+      "scientificName": "Paeonia lactiflora",
+      "properties": "苦、酸，微寒",
+      "functions": ["养血调经", "敛阴止汗", "柔肝止痛", "平抑肝阳"],
+      "usage": "煎服，6-15g",
+      "cautions": ["虚寒腹痛泄泻者慎服"],
+      "description": "白芍为毛茛科植物芍药的干燥根。",
+      "category": "补虚药"
+    }
+  },
+  {
+    "herbId": "茯苓",
+    "data": {
+      "name": "茯苓",
+      "scientificName": "Poria cocos",
+      "properties": "甘、淡，平",
+      "functions": ["利水渗湿", "健脾", "宁心"],
+      "usage": "煎服，10-15g",
+      "cautions": ["虚寒精滑或气虚下陷者慎服"],
+      "description": "茯苓为多孔菌科真菌茯苓的干燥菌核。",
+      "category": "利水渗湿药"
+    }
+  },
+  {
+    "herbId": "枸杞子",
+    "data": {
+      "name": "枸杞子",
+      "scientificName": "Lycium barbarum",
+      "properties": "甘，平",
+      "functions": ["滋补肝肾", "益精明目"],
+      "usage": "煎服，6-12g",
+      "cautions": ["外邪实热，脾虚有湿及泄泻者慎服"],
+      "description": "枸杞子为茄科植物宁夏枸杞的干燥成熟果实。",
+      "category": "补虚药"
+    }
+  }
+]

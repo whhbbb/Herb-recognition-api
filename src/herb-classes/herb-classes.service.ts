@@ -8,15 +8,15 @@ import { UpdateHerbClassDto } from './dto/update-herb-class.dto';
 type HerbMetaStore = Record<
   string,
   {
-    herbNameZh?: string;
-    pinyin?: string;
-    latinName?: string;
+    name?: string;
+    scientificName?: string;
     properties?: string;
-    meridian?: string;
-    effects?: string[];
+    functions?: string[];
     usage?: string;
-    cautions?: string;
+    cautions?: string[];
+    image?: string;
     description?: string;
+    category?: string;
     updatedAt?: string;
   }
 >;
@@ -57,12 +57,27 @@ export class HerbClassesService {
     return classes.map((item) => {
       const meta = metaStore[item.herbId] ?? {};
       return {
-        herbId: item.herbId,
+        id: item.herbId,
         herbName: item.herbName,
+        herbId: item.herbId,
         count: item.count,
-        ...meta,
+        name: meta.name ?? item.herbName,
+        scientificName: meta.scientificName ?? item.herbName,
+        properties: meta.properties ?? '',
+        functions: meta.functions ?? [],
+        usage: meta.usage ?? '',
+        cautions: meta.cautions ?? [],
+        image: meta.image ?? '',
+        description: meta.description ?? '',
+        category: meta.category ?? '未分类',
+        updatedAt: meta.updatedAt ?? null,
       };
     });
+  }
+
+  async getOne(herbId: string) {
+    const list = await this.list();
+    return list.find((item) => item.herbId === herbId) ?? null;
   }
 
   async upsert(herbId: string, dto: UpdateHerbClassDto) {
