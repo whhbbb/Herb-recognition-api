@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
 import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { Repository } from 'typeorm';
+import { TrainingSampleEntity } from '../entities/training-sample.entity';
 import { SamplesService } from '../samples/samples.service';
 import { UpdateHerbClassDto } from './dto/update-herb-class.dto';
 
@@ -27,6 +30,8 @@ export class HerbClassesService {
   constructor(
     private readonly config: ConfigService,
     private readonly samplesService: SamplesService,
+    @InjectRepository(TrainingSampleEntity)
+    private readonly sampleRepo: Repository<TrainingSampleEntity>,
   ) {}
 
   private getMetaFilePath() {
@@ -50,10 +55,24 @@ export class HerbClassesService {
   }
 
   async list() {
-    const [classes, metaStore] = await Promise.all([
+    const [classes, metaStore, reps] = await Promise.all([
       this.samplesService.listClasses(),
       this.readMetaStore(),
+      this.sampleRepo
+        .createQueryBuilder('sample')
+        .select('sample.herbId', 'herbId')
+        .addSelect('sample.fileUrl', 'fileUrl')
+        .addSelect('sample.createdAt', 'createdAt')
+        .orderBy('sample.createdAt', 'DESC')
+        .getRawMany<{ herbId: string; fileUrl: string; createdAt: string }>(),
     ]);
+
+    const repImageMap = new Map<string, string>();
+    for (const row of reps) {
+      if (!repImageMap.has(row.herbId) && row.fileUrl) {
+        repImageMap.set(row.herbId, row.fileUrl);
+      }
+    }
 
     return classes.map((item) => {
       const meta = metaStore[item.herbId] ?? {};
@@ -69,7 +88,7 @@ export class HerbClassesService {
         functions: meta.functions ?? [],
         usage: meta.usage ?? '',
         cautions: meta.cautions ?? [],
-        image: meta.image ?? '',
+        image: meta.image?.trim() || repImageMap.get(item.herbId) || '',
         description: meta.description ?? '',
         category: meta.category ?? '未分类',
         updatedAt: meta.updatedAt ?? null,
