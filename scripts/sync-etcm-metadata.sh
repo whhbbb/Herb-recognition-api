@@ -49,9 +49,9 @@ while IFS=$'\t' read -r herb_id query zh_name; do
         if [ -n "$properties" ]; then properties="$properties; $flav"; else properties="$flav"; fi
       fi
       desc="来源: ETCM2; 拼音: $pinyin; 归经: $meri"
-      entry=$(jq -n --arg herbId "$herb_id" --arg name "$zh_name" --arg sci "$latin" --arg properties "$properties" --arg desc "$desc" '{herbId:$herbId,data:{name:$name,scientificName:$sci,properties:$properties,description:$desc,category:"中药材",functions:[],cautions:[]}}')
+      entry=$(jq -n --arg herbId "$herb_id" --arg name "$zh_name" --arg sci "$latin" --arg properties "$properties" --arg meridian "$meri" --arg desc "$desc" '{herbId:$herbId,data:{name:$name,scientificName:$sci,properties:$properties,meridian:$meridian,description:$desc,category:"中药材",functions:[],cautions:[]}}')
     else
-      entry=$(jq -n --arg herbId "$herb_id" --arg name "$zh_name" '{herbId:$herbId,data:{name:$name,scientificName:"",properties:"",description:"来源: ETCM2 检索结果存在近似匹配，待人工核验",category:"待核验",functions:[],cautions:[]}}')
+      entry=$(jq -n --arg herbId "$herb_id" --arg name "$zh_name" '{herbId:$herbId,data:{name:$name,scientificName:"",properties:"",meridian:"",description:"来源: ETCM2 检索结果存在近似匹配，待人工核验",category:"待核验",functions:[],cautions:[]}}')
     fi
   fi
 

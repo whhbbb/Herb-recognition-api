@@ -11,6 +11,7 @@ type HerbMetaStore = Record<
     name?: string;
     scientificName?: string;
     properties?: string;
+    meridian?: string;
     functions?: string[];
     usage?: string;
     cautions?: string[];
@@ -64,6 +65,7 @@ export class HerbClassesService {
         name: meta.name ?? item.herbName,
         scientificName: meta.scientificName ?? item.herbName,
         properties: meta.properties ?? '',
+        meridian: meta.meridian ?? '',
         functions: meta.functions ?? [],
         usage: meta.usage ?? '',
         cautions: meta.cautions ?? [],

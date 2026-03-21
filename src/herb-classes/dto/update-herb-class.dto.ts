@@ -14,6 +14,10 @@ export class UpdateHerbClassDto {
   properties?: string;
 
   @IsOptional()
+  @IsString()
+  meridian?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   functions?: string[];
