@@ -88,7 +88,7 @@ export class HerbClassesService {
         functions: meta.functions ?? [],
         usage: meta.usage ?? '',
         cautions: meta.cautions ?? [],
-        image: meta.image?.trim() || repImageMap.get(item.herbId) || '',
+        image: repImageMap.get(item.herbId) || meta.image?.trim() || '',
         description: meta.description ?? '',
         category: meta.category ?? '未分类',
         updatedAt: meta.updatedAt ?? null,
