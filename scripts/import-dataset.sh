@@ -21,7 +21,8 @@ if [ ! -d "$ROOT_DIR" ]; then
 fi
 
 is_image_file() {
-  local f="${1,,}"
+  local f
+  f="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   [[ "$f" == *.jpg || "$f" == *.jpeg || "$f" == *.png || "$f" == *.webp || "$f" == *.bmp ]]
 }
 
