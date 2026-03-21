@@ -61,5 +61,6 @@ curl -X POST http://127.0.0.1:4000/api/models \
 ## 外部数据集接入建议
 
 - 下载后按 `类别文件夹/图片` 组织
-- 在前端训练页使用“目录导入”，样本会写入 `training_samples`
+- 可用脚本批量导入：`bash scripts/import-dataset.sh /数据集根目录 http://127.0.0.1:4000/api`
+- 或在前端训练页使用“目录导入”，样本会写入 `training_samples`
 - 再运行本训练脚本进行集中训练

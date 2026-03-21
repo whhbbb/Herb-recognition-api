@@ -62,6 +62,7 @@ npm run start
 - 日常发布更新：`bash scripts/server-update.sh`
 - 训练环境初始化：`bash scripts/train-init.sh`
 - 启动训练：`bash scripts/train-run.sh 20 16 training/runs`
+- 批量导入数据集：`bash scripts/import-dataset.sh /path/to/dataset_root http://127.0.0.1:4000/api`
 
 ## 下一步建议
 - 将当前磁盘存储替换为阿里云 OSS（保留数据库结构不变，仅替换上传实现）。
