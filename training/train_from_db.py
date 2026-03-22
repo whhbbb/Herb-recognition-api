@@ -208,7 +208,15 @@ def main():
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+    use_pretrained = os.getenv('TRAIN_USE_PRETRAINED', 'false').lower() in {'1', 'true', 'yes'}
+    if use_pretrained:
+        try:
+            model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        except Exception as exc:
+            print(f'[warn] 预训练权重加载失败，回退随机初始化: {exc}')
+            model = models.resnet18(weights=None)
+    else:
+        model = models.resnet18(weights=None)
     in_features = model.fc.in_features
     model.fc = nn.Linear(in_features, len(label_to_idx))
     model = model.to(device)
