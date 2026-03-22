@@ -3,8 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { Repository } from 'typeorm';
+import { ModelVersionEntity } from '../entities/model-version.entity';
 import { TrainingJobEntity } from '../entities/training-job.entity';
 import { SamplesService } from '../samples/samples.service';
 import { CreateTrainingJobDto } from './dto/create-training-job.dto';
@@ -18,6 +20,8 @@ export class TrainingService implements OnModuleInit {
   constructor(
     @InjectRepository(TrainingJobEntity)
     private readonly trainingRepo: Repository<TrainingJobEntity>,
+    @InjectRepository(ModelVersionEntity)
+    private readonly modelRepo: Repository<ModelVersionEntity>,
     private readonly samplesService: SamplesService,
     private readonly config: ConfigService,
   ) {}
@@ -157,14 +161,61 @@ export class TrainingService implements OnModuleInit {
 
     const finalLog = result.log || 'No training logs';
     if (result.code === 0) {
+      const model = await this.createModelVersionFromRun(job, finalLog);
       job.status = 'succeeded';
       job.finishedAt = new Date();
-      job.log = finalLog;
+      job.log = model
+        ? `${finalLog}\n\n[model_registered] id=${model.id} name=${model.name} version=${model.version} active=${String(model.isActive)}`
+        : `${finalLog}\n\n[model_register_skipped] 未识别训练产物目录`;
     } else {
       job.status = 'failed';
       job.finishedAt = new Date();
       job.log = `[exit:${String(result.code)} signal:${String(result.signal)}]\n${finalLog}`;
     }
     await this.trainingRepo.save(job);
+  }
+
+  private extractRunDirFromLog(logText: string) {
+    // train_from_db.py 输出格式：model:   <runDir>/model.pt
+    const match = logText.match(/model:\s+([^\n\r]+model\.pt)/i);
+    if (!match?.[1]) {
+      return null;
+    }
+    const modelPath = match[1].trim();
+    return modelPath.endsWith('/model.pt') ? modelPath.slice(0, -'/model.pt'.length) : null;
+  }
+
+  private async createModelVersionFromRun(job: TrainingJobEntity, logText: string) {
+    try {
+      const runDir = this.extractRunDirFromLog(logText);
+      if (!runDir) {
+        return null;
+      }
+
+      const metricsPath = join(runDir, 'metrics.json');
+      let metrics: Record<string, unknown> | null = null;
+      if (existsSync(metricsPath)) {
+        const raw = await fs.readFile(metricsPath, 'utf-8');
+        metrics = JSON.parse(raw) as Record<string, unknown>;
+      }
+
+      const hasActive = await this.modelRepo.exist({ where: { isActive: true } });
+      const runTag = runDir.split('/').pop() || `${Date.now()}`;
+      const version = `run-${runTag}`;
+
+      const model = this.modelRepo.create({
+        name: `AutoModel-${runTag}`,
+        version,
+        framework: 'pytorch',
+        artifactUrl: runDir,
+        metrics,
+        isActive: !hasActive,
+      });
+
+      return await this.modelRepo.save(model);
+    } catch (error) {
+      this.logger.error(`Failed to register model for job ${job.id}: ${(error as Error).message}`);
+      return null;
+    }
   }
 }

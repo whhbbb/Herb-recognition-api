@@ -1,10 +1,13 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { Repository } from 'typeorm';
+import { ModelVersionEntity } from '../entities/model-version.entity';
 import { HerbClassesService } from '../herb-classes/herb-classes.service';
 
 const execFileAsync = promisify(execFile);
@@ -24,6 +27,8 @@ export class InferService {
   constructor(
     private readonly config: ConfigService,
     private readonly herbClassesService: HerbClassesService,
+    @InjectRepository(ModelVersionEntity)
+    private readonly modelRepo: Repository<ModelVersionEntity>,
   ) {}
 
   private resolvePythonBin() {
@@ -37,12 +42,41 @@ export class InferService {
     return join(process.cwd(), 'training', 'predict_from_model.py');
   }
 
+  private async resolveActiveRunDir() {
+    const active = await this.modelRepo.findOne({
+      where: { isActive: true },
+      order: { updatedAt: 'DESC' },
+    });
+    if (!active?.artifactUrl?.trim()) {
+      return null;
+    }
+    const runDir = active.artifactUrl.trim();
+    const modelPath = join(runDir, 'model.pt');
+    const labelsPath = join(runDir, 'labels.json');
+    if (!existsSync(modelPath) || !existsSync(labelsPath)) {
+      return null;
+    }
+    return runDir;
+  }
+
   async health() {
     const scriptPath = this.resolvePredictScriptPath();
+    const activeModel = await this.modelRepo.findOne({
+      where: { isActive: true },
+      order: { updatedAt: 'DESC' },
+    });
     return {
       ok: true,
       pythonBin: this.resolvePythonBin(),
       predictScriptExists: existsSync(scriptPath),
+      activeModel: activeModel
+        ? {
+            id: activeModel.id,
+            name: activeModel.name,
+            version: activeModel.version,
+            artifactUrl: activeModel.artifactUrl,
+          }
+        : null,
     };
   }
 
@@ -54,9 +88,14 @@ export class InferService {
 
     try {
       const pythonBin = this.resolvePythonBin();
+      const activeRunDir = await this.resolveActiveRunDir();
+      const scriptArgs = [scriptPath, '--image', imagePath, '--topk', String(topK)];
+      if (activeRunDir) {
+        scriptArgs.push('--run-dir', activeRunDir);
+      }
       const { stdout, stderr } = await execFileAsync(
         pythonBin,
-        [scriptPath, '--image', imagePath, '--topk', String(topK)],
+        scriptArgs,
         { maxBuffer: 1024 * 1024 * 4 },
       );
       if (stderr?.trim()) {
@@ -90,4 +129,3 @@ export class InferService {
     }
   }
 }
-
