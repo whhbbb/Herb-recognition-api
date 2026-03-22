@@ -170,12 +170,26 @@ export class TrainingService implements OnModuleInit {
         });
 
         let logBuffer = '';
+        let dirty = false;
+        const flushRunningLog = async () => {
+          if (!dirty) {
+            return;
+          }
+          dirty = false;
+          try {
+            await this.trainingRepo.update({ id: job.id }, { log: this.truncateLog(logBuffer), status: 'running' });
+          } catch (error) {
+            this.logger.warn(`flush training log failed for job ${job.id}: ${(error as Error).message}`);
+          }
+        };
+        const timer = setInterval(() => {
+          void flushRunningLog();
+        }, 5000);
+
         const appendLog = (chunk: string) => {
           logBuffer += chunk;
-          // 只保留最后 12000 字符，防止数据库日志字段过大
-          if (logBuffer.length > 12000) {
-            logBuffer = logBuffer.slice(-12000);
-          }
+          logBuffer = this.truncateLog(logBuffer);
+          dirty = true;
         };
 
         child.stdout.on('data', (chunk: Buffer) => appendLog(chunk.toString('utf-8')));
@@ -184,7 +198,10 @@ export class TrainingService implements OnModuleInit {
           appendLog(`\n[spawn_error] ${error.message}\n`);
         });
         child.on('close', (code, signal) => {
-          resolve({ code, signal, log: logBuffer.trim() });
+          clearInterval(timer);
+          void flushRunningLog().finally(() => {
+            resolve({ code, signal, log: logBuffer.trim() });
+          });
         });
       },
     );
@@ -213,6 +230,11 @@ export class TrainingService implements OnModuleInit {
     }
     const modelPath = match[1].trim();
     return modelPath.endsWith('/model.pt') ? modelPath.slice(0, -'/model.pt'.length) : null;
+  }
+
+  private truncateLog(value: string) {
+    const maxLen = 40000;
+    return value.length > maxLen ? value.slice(-maxLen) : value;
   }
 
   private extractAutoActivate(logText: string | null) {
