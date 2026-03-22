@@ -1,4 +1,4 @@
-import { IsNumber, Max, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, Max, Min } from 'class-validator';
 
 export class CreateTrainingJobDto {
   @IsNumber()
@@ -15,4 +15,8 @@ export class CreateTrainingJobDto {
   @Min(0.05)
   @Max(0.5)
   validationSplit = 0.2;
+
+  @IsOptional()
+  @IsBoolean()
+  autoActivate = false;
 }

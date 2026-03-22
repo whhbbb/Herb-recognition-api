@@ -39,7 +39,7 @@ export class TrainingService implements OnModuleInit {
       epochs: dto.epochs,
       batchSize: dto.batchSize,
       validationSplit: dto.validationSplit,
-      log: 'Job created by API',
+      log: `Job created by API [auto_activate=${dto.autoActivate ? 'true' : 'false'}]`,
       startedAt: null,
       finishedAt: null,
     });
@@ -109,6 +109,7 @@ export class TrainingService implements OnModuleInit {
   }
 
   private async runOneJob(job: TrainingJobEntity) {
+    const autoActivate = this.extractAutoActivate(job.log);
     job.status = 'running';
     job.startedAt = new Date();
     job.finishedAt = null;
@@ -161,11 +162,11 @@ export class TrainingService implements OnModuleInit {
 
     const finalLog = result.log || 'No training logs';
     if (result.code === 0) {
-      const model = await this.createModelVersionFromRun(job, finalLog);
+      const model = await this.createModelVersionFromRun(job, finalLog, autoActivate);
       job.status = 'succeeded';
       job.finishedAt = new Date();
       job.log = model
-        ? `${finalLog}\n\n[model_registered] id=${model.id} name=${model.name} version=${model.version} active=${String(model.isActive)}`
+        ? `${finalLog}\n\n[model_registered] id=${model.id} name=${model.name} version=${model.version} active=${String(model.isActive)} auto_activate=${String(autoActivate)}`
         : `${finalLog}\n\n[model_register_skipped] 未识别训练产物目录`;
     } else {
       job.status = 'failed';
@@ -185,7 +186,14 @@ export class TrainingService implements OnModuleInit {
     return modelPath.endsWith('/model.pt') ? modelPath.slice(0, -'/model.pt'.length) : null;
   }
 
-  private async createModelVersionFromRun(job: TrainingJobEntity, logText: string) {
+  private extractAutoActivate(logText: string | null) {
+    if (!logText) {
+      return false;
+    }
+    return /\[auto_activate=true\]/i.test(logText);
+  }
+
+  private async createModelVersionFromRun(job: TrainingJobEntity, logText: string, autoActivate: boolean) {
     try {
       const runDir = this.extractRunDirFromLog(logText);
       if (!runDir) {
@@ -200,6 +208,9 @@ export class TrainingService implements OnModuleInit {
       }
 
       const hasActive = await this.modelRepo.exist({ where: { isActive: true } });
+      if (autoActivate) {
+        await this.modelRepo.update({ isActive: true }, { isActive: false });
+      }
       const runTag = runDir.split('/').pop() || `${Date.now()}`;
       const version = `run-${runTag}`;
 
@@ -209,7 +220,7 @@ export class TrainingService implements OnModuleInit {
         framework: 'pytorch',
         artifactUrl: runDir,
         metrics,
-        isActive: !hasActive,
+        isActive: autoActivate || !hasActive,
       });
 
       return await this.modelRepo.save(model);
