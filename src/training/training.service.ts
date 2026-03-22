@@ -27,8 +27,13 @@ export class TrainingService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    // 服务启动后尝试继续处理遗留 pending 任务
-    void this.kickWorker();
+    // 服务启动后先清理遗留 running（上次进程中断导致），再继续处理 pending 任务
+    void this.bootstrapWorker();
+  }
+
+  private async bootstrapWorker() {
+    await this.recoverInterruptedRunningJobs();
+    await this.kickWorker();
   }
 
   async createJob(dto: CreateTrainingJobDto) {
@@ -106,6 +111,30 @@ export class TrainingService implements OnModuleInit {
     } finally {
       this.workerRunning = false;
     }
+  }
+
+  private async recoverInterruptedRunningJobs() {
+    const runningJobs = await this.trainingRepo.find({
+      where: { status: 'running' },
+      order: { createdAt: 'ASC' },
+    });
+
+    if (!runningJobs.length) {
+      return;
+    }
+
+    const now = new Date();
+    for (const job of runningJobs) {
+      const prevLog = job.log?.trim();
+      job.status = 'failed';
+      job.finishedAt = now;
+      job.log = prevLog
+        ? `${prevLog}\n\n[recovered_on_startup] 检测到服务重启，running 任务已判定中断并标记为 failed`
+        : '[recovered_on_startup] 检测到服务重启，running 任务已判定中断并标记为 failed';
+      await this.trainingRepo.save(job);
+    }
+
+    this.logger.warn(`Recovered ${runningJobs.length} interrupted running training job(s) on startup`);
   }
 
   private async runOneJob(job: TrainingJobEntity) {
