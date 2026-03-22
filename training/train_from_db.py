@@ -168,6 +168,12 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output-dir', default='training/runs')
+    low_memory_default = os.getenv('TRAIN_LOW_MEMORY', 'false').lower() in {'1', 'true', 'yes'}
+    parser.add_argument(
+        '--num-workers',
+        type=int,
+        default=int(os.getenv('TRAIN_NUM_WORKERS', '0' if low_memory_default else '2')),
+    )
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -203,8 +209,18 @@ def main():
     train_ds = HerbDataset(train_samples, label_to_idx, train_tf)
     val_ds = HerbDataset(val_samples, label_to_idx, eval_tf)
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=2)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=max(0, int(args.num_workers)),
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=max(0, int(args.num_workers)),
+    )
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

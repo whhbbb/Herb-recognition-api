@@ -11,8 +11,9 @@ module.exports = {
       max_memory_restart: '512M',
       env: {
         NODE_ENV: 'production',
+        TRAIN_LOW_MEMORY: 'true',
+        TRAIN_NUM_WORKERS: '0',
       },
     },
   ],
 };
-
