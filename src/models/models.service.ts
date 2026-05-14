@@ -32,9 +32,10 @@ export class ModelsService {
   }
 
   async list() {
-    return this.modelRepo.find({
+    const models = await this.modelRepo.find({
       order: { createdAt: 'DESC' },
     });
+    return Promise.all(models.map((model) => this.withEvaluationArtifact(model)));
   }
 
   async activate(id: string) {
@@ -68,6 +69,42 @@ export class ModelsService {
     return model;
   }
 
+  private normalizeMetrics(metrics: unknown) {
+    if (!metrics) {
+      return {};
+    }
+    if (typeof metrics === 'string') {
+      try {
+        const parsed = JSON.parse(metrics) as unknown;
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : {};
+      } catch {
+        return {};
+      }
+    }
+    return typeof metrics === 'object' && !Array.isArray(metrics) ? (metrics as Record<string, unknown>) : {};
+  }
+
+  private async readEvaluationArtifact(model: ModelVersionEntity) {
+    const evaluationPath = join(model.artifactUrl, 'evaluation.json');
+    if (!existsSync(evaluationPath)) {
+      return null;
+    }
+    const raw = await fs.readFile(evaluationPath, 'utf-8');
+    return JSON.parse(raw) as Record<string, unknown>;
+  }
+
+  private async withEvaluationArtifact(model: ModelVersionEntity) {
+    const metrics = this.normalizeMetrics(model.metrics);
+    if (metrics.evaluation) {
+      return { ...model, metrics };
+    }
+
+    const evaluation = await this.readEvaluationArtifact(model);
+    return evaluation ? { ...model, metrics: { ...metrics, evaluation } } : { ...model, metrics };
+  }
+
   async evaluate(id: string) {
     const model = await this.findOrFail(id);
     const scriptPath = this.resolveEvaluationScript();
@@ -96,11 +133,11 @@ export class ModelsService {
       }
 
       const evaluation = JSON.parse(stdout) as Record<string, unknown>;
-      model.metrics = {
-        ...(model.metrics ?? {}),
+      const metrics = {
+        ...this.normalizeMetrics(model.metrics),
         evaluation,
       };
-      await this.modelRepo.save(model);
+      await this.modelRepo.update(model.id, { metrics });
       return evaluation;
     } catch (error) {
       throw new InternalServerErrorException(`模型评估失败: ${(error as Error).message}`);
@@ -109,18 +146,16 @@ export class ModelsService {
 
   async getEvaluation(id: string) {
     const model = await this.findOrFail(id);
-    const evaluationFromMetrics = model.metrics?.evaluation;
+    const evaluationFromMetrics = this.normalizeMetrics(model.metrics).evaluation;
     if (evaluationFromMetrics) {
       return evaluationFromMetrics;
     }
 
-    const evaluationPath = join(model.artifactUrl, 'evaluation.json');
-    if (!existsSync(evaluationPath)) {
+    const evaluation = await this.readEvaluationArtifact(model);
+    if (!evaluation) {
       throw new NotFoundException('该模型尚未生成评估结果');
     }
-
-    const raw = await fs.readFile(evaluationPath, 'utf-8');
-    return JSON.parse(raw) as Record<string, unknown>;
+    return evaluation;
   }
 
   async getConfusionMatrixPath(id: string) {
