@@ -101,6 +101,18 @@ def safe_float(value):
     return float(value) if np.isfinite(value) else 0.0
 
 
+def build_split_candidates(primary: str, fallback_splits: str):
+    candidates = [primary]
+    for split in fallback_splits.split(","):
+        split = split.strip()
+        if split and split not in candidates:
+            candidates.append(split)
+    invalid = [split for split in candidates if split not in {"test", "val", "train"}]
+    if invalid:
+        raise RuntimeError(f"评估数据划分不合法: {', '.join(invalid)}")
+    return candidates
+
+
 def draw_confusion_matrix(matrix, labels: List[str], output_path: Path):
     cell = 44
     left = 260
@@ -164,7 +176,11 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate trained herb classifier")
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--split", choices=["test", "val", "train"], default="test")
-    parser.add_argument("--fallback-split", choices=["test", "val", "train"], default="val")
+    parser.add_argument(
+        "--fallback-splits",
+        default="val,train",
+        help="Comma-separated fallback splits when the primary split has no samples.",
+    )
     parser.add_argument("--db-host", default=os.getenv("DB_HOST", "127.0.0.1"))
     parser.add_argument("--db-port", type=int, default=int(os.getenv("DB_PORT", "3306")))
     parser.add_argument("--db-user", default=os.getenv("DB_USER", "root"))
@@ -179,15 +195,18 @@ def main():
         raise RuntimeError(f"model.pt 不存在: {model_path}")
 
     label_to_idx, idx_to_label = load_labels(run_dir)
-    samples = fetch_samples(args, args.split)
+    split_candidates = build_split_candidates(args.split, args.fallback_splits)
+    samples = []
     used_split = args.split
-    if not samples and args.fallback_split != args.split:
-        samples = fetch_samples(args, args.fallback_split)
-        used_split = args.fallback_split
+    for split in split_candidates:
+        samples = fetch_samples(args, split)
+        if samples:
+            used_split = split
+            break
 
     samples = [sample for sample in samples if sample["herb_id"] in label_to_idx]
     if not samples:
-        raise RuntimeError(f"没有可用于评估的 {args.split}/{args.fallback_split} 样本")
+        raise RuntimeError(f"没有可用于评估的 {'/'.join(split_candidates)} 样本")
 
     transform = transforms.Compose(
         [
