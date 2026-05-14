@@ -5,15 +5,14 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
-import { promisify } from 'node:util';
 import { Repository } from 'typeorm';
 import { ModelVersionEntity } from '../entities/model-version.entity';
 import { CreateModelVersionDto } from './dto/create-model-version.dto';
 
-const execFileAsync = promisify(execFile);
-
 @Injectable()
 export class ModelsService {
+  private readonly runningEvaluations = new Set<string>();
+
   constructor(
     @InjectRepository(ModelVersionEntity)
     private readonly modelRepo: Repository<ModelVersionEntity>,
@@ -105,6 +104,17 @@ export class ModelsService {
     return evaluation ? { ...model, metrics: { ...metrics, evaluation } } : { ...model, metrics };
   }
 
+  private async patchMetrics(id: string, patch: Record<string, unknown>) {
+    const model = await this.findOrFail(id);
+    const metrics = {
+      ...this.normalizeMetrics(model.metrics),
+      ...patch,
+    };
+    model.metrics = metrics;
+    await this.modelRepo.save(model);
+    return metrics;
+  }
+
   async evaluate(id: string) {
     const model = await this.findOrFail(id);
     const scriptPath = this.resolveEvaluationScript();
@@ -117,31 +127,72 @@ export class ModelsService {
       throw new InternalServerErrorException('模型产物不完整，缺少 model.pt 或 labels.json');
     }
 
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        this.resolvePythonBin(),
-        [scriptPath, '--run-dir', runDir],
-        {
-          cwd: process.cwd(),
-          env: process.env,
-          maxBuffer: 1024 * 1024 * 16,
-        },
-      );
-      if (stderr?.trim()) {
-        // 保留 stderr 作为排查信息，评估脚本以退出码判断成败
-        console.warn('[model-evaluate] python stderr:', stderr);
-      }
-
-      const evaluation = JSON.parse(stdout) as Record<string, unknown>;
-      const metrics = {
-        ...this.normalizeMetrics(model.metrics),
-        evaluation,
-      };
-      await this.modelRepo.update(model.id, { metrics });
-      return evaluation;
-    } catch (error) {
-      throw new InternalServerErrorException(`模型评估失败: ${(error as Error).message}`);
+    if (this.runningEvaluations.has(id)) {
+      return { status: 'running', modelId: id, message: '模型评估正在执行中' };
     }
+
+    this.runningEvaluations.add(id);
+    await this.patchMetrics(id, {
+      evaluationStatus: {
+        status: 'running',
+        startedAt: new Date().toISOString(),
+      },
+    });
+    this.runEvaluationInBackground(id, runDir, scriptPath);
+
+    return { status: 'running', modelId: id, message: '模型评估已开始，请稍后刷新查看结果' };
+  }
+
+  private runEvaluationInBackground(id: string, runDir: string, scriptPath: string) {
+    execFile(
+      this.resolvePythonBin(),
+      [scriptPath, '--run-dir', runDir],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          EVAL_NUM_THREADS: process.env.EVAL_NUM_THREADS ?? '1',
+        },
+        maxBuffer: 1024 * 1024 * 16,
+      },
+      async (error, stdout, stderr) => {
+        this.runningEvaluations.delete(id);
+
+        if (stderr?.trim()) {
+          console.warn('[model-evaluate] python stderr:', stderr);
+        }
+
+        if (error) {
+          await this.patchMetrics(id, {
+            evaluationStatus: {
+              status: 'failed',
+              finishedAt: new Date().toISOString(),
+              error: error.message,
+            },
+          });
+          return;
+        }
+
+        try {
+          const evaluation = JSON.parse(stdout) as Record<string, unknown>;
+          await this.patchMetrics(id, {
+            evaluation,
+            evaluationStatus: {
+              status: 'completed',
+              finishedAt: new Date().toISOString(),
+            },
+          });
+        } catch (parseError) {
+          await this.patchMetrics(id, {
+            evaluationStatus: {
+              status: 'failed',
+              finishedAt: new Date().toISOString(),
+              error: `评估结果解析失败: ${(parseError as Error).message}`,
+            },
+          });
+        }
+      },
+    );
   }
 
   async getEvaluation(id: string) {

@@ -187,7 +187,10 @@ def main():
     parser.add_argument("--db-password", default=os.getenv("DB_PASSWORD", ""))
     parser.add_argument("--db-name", default=os.getenv("DB_NAME", "herb_recognition"))
     parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--num-threads", type=int, default=int(os.getenv("EVAL_NUM_THREADS", "1")))
+    parser.add_argument("--max-samples", type=int, default=int(os.getenv("EVAL_MAX_SAMPLES", "0")))
     args = parser.parse_args()
+    torch.set_num_threads(max(1, args.num_threads))
 
     run_dir = Path(args.run_dir)
     model_path = run_dir / "model.pt"
@@ -207,6 +210,8 @@ def main():
     samples = [sample for sample in samples if sample["herb_id"] in label_to_idx]
     if not samples:
         raise RuntimeError(f"没有可用于评估的 {'/'.join(split_candidates)} 样本")
+    if args.max_samples > 0:
+        samples = samples[: args.max_samples]
 
     transform = transforms.Compose(
         [
