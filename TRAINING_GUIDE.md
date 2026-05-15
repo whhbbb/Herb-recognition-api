@@ -23,6 +23,8 @@
 - 读取对应图片路径并训练 `ResNet18`
 - 导出 `model.pt / labels.json / metrics.json`
 
+如果本地没有启动 MySQL，也可以使用 `training/train_from_dir.py` 直接从“类别文件夹/图片”目录训练，输出产物与数据库训练方式一致。
+
 ### 1) 安装训练依赖
 
 ```bash
@@ -36,6 +38,14 @@ bash scripts/train-init.sh
 cd /www/wwwroot/Herb-recognition-api
 bash scripts/train-run.sh 20 16 training/runs
 ```
+
+本地目录训练示例：
+
+```bash
+bash scripts/train-from-dir.sh /path/to/dataset_root 40 16 training/runs
+```
+
+其中 `dataset_root` 应按“类别文件夹/图片”组织，并至少包含 2 个有效类别。
 
 ### 3) 训练结果位置
 
@@ -53,9 +63,15 @@ curl -X POST http://127.0.0.1:4000/api/models \
     "name":"resnet18-herb",
     "version":"v1",
     "framework":"pytorch",
-    "artifactUrl":"/www/wwwroot/Herb-recognition-api/training/runs/<run_id>/model.pt",
+    "artifactUrl":"/www/wwwroot/Herb-recognition-api/training/runs/<run_id>",
     "isActive":true
   }'
+```
+
+也可以使用项目脚本登记并激活：
+
+```bash
+node scripts/register-model.js training/runs/<run_id> http://127.0.0.1:4000/api
 ```
 
 ## 外部数据集接入建议

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
-import pymysql
 import torch
 import torch.nn as nn
 from PIL import Image
@@ -18,15 +17,16 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import models, transforms
 
 
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+
+
 @dataclass
 class Sample:
     herb_id: str
-    herb_name: str
     image_path: str
-    split: str
 
 
-class HerbDataset(Dataset):
+class HerbDirDataset(Dataset):
     def __init__(self, samples: List[Sample], label_to_idx: dict, transform):
         self.samples = samples
         self.label_to_idx = label_to_idx
@@ -51,63 +51,36 @@ def set_seed(seed: int):
     torch.cuda.manual_seed_all(seed)
 
 
-def fetch_samples(args) -> List[Sample]:
-    conn = pymysql.connect(
-        host=args.db_host,
-        port=args.db_port,
-        user=args.db_user,
-        password=args.db_password,
-        database=args.db_name,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor,
-    )
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT herbId AS herb_id, herbName AS herb_name, storageKey AS storage_key, split
-                FROM training_samples
-                ORDER BY createdAt DESC
-                """
-            )
-            rows = cursor.fetchall()
-    finally:
-        conn.close()
+def fetch_samples(dataset_dir: Path) -> List[Sample]:
+    if not dataset_dir.exists():
+        raise RuntimeError(f'数据集目录不存在: {dataset_dir}')
 
     samples: List[Sample] = []
-    for row in rows:
-        p = Path(row['storage_key'])
-        if not p.exists():
+    for class_dir in sorted(dataset_dir.iterdir()):
+        if not class_dir.is_dir():
             continue
-        samples.append(
-            Sample(
-                herb_id=row['herb_id'],
-                herb_name=row['herb_name'],
-                image_path=str(p),
-                split=row['split'] or 'train',
-            )
-        )
+        herb_id = class_dir.name
+        for image_path in sorted(class_dir.rglob('*')):
+            if image_path.is_file() and image_path.suffix.lower() in IMAGE_EXTENSIONS:
+                samples.append(Sample(herb_id=herb_id, image_path=str(image_path)))
     return samples
 
 
 def build_splits(samples: List[Sample], val_ratio: float, seed: int) -> Tuple[List[Sample], List[Sample]]:
-    train_samples = [s for s in samples if s.split == 'train']
-    val_samples = [s for s in samples if s.split == 'val']
+    if len(samples) < 8:
+        raise RuntimeError('样本太少，至少需要 8 张图片')
 
-    if val_samples:
-        return train_samples, val_samples
+    labels = [s.herb_id for s in samples]
+    class_counts = {label: labels.count(label) for label in set(labels)}
+    stratify = labels if len(class_counts) > 1 and min(class_counts.values()) >= 2 else None
 
-    if len(train_samples) < 8:
-        raise RuntimeError('样本太少，至少需要 8 张 train 样本')
-
-    labels = [s.herb_id for s in train_samples]
-    tr, va = train_test_split(
-        train_samples,
+    train_samples, val_samples = train_test_split(
+        samples,
         test_size=val_ratio,
         random_state=seed,
-        stratify=labels if len(set(labels)) > 1 else None,
+        stratify=stratify,
     )
-    return tr, va
+    return train_samples, val_samples
 
 
 def train_epoch(model, loader, criterion, optimizer, device):
@@ -155,40 +128,50 @@ def eval_epoch(model, loader, criterion, device):
     return total_loss / max(total, 1), correct / max(total, 1)
 
 
+def build_model(num_classes: int, use_pretrained: bool):
+    if use_pretrained:
+        try:
+            model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        except Exception as exc:
+            print(f'[warn] 预训练权重加载失败，回退随机初始化: {exc}')
+            model = models.resnet18(weights=None)
+    else:
+        model = models.resnet18(weights=None)
+
+    in_features = model.fc.in_features
+    model.fc = nn.Linear(in_features, num_classes)
+    return model
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Train herb classifier from MySQL samples')
-    parser.add_argument('--db-host', default=os.getenv('DB_HOST', '127.0.0.1'))
-    parser.add_argument('--db-port', type=int, default=int(os.getenv('DB_PORT', '3306')))
-    parser.add_argument('--db-user', default=os.getenv('DB_USER', 'root'))
-    parser.add_argument('--db-password', default=os.getenv('DB_PASSWORD', ''))
-    parser.add_argument('--db-name', default=os.getenv('DB_NAME', 'herb_recognition'))
-    parser.add_argument('--epochs', type=int, default=15)
+    parser = argparse.ArgumentParser(description='Train herb classifier from class folders')
+    parser.add_argument('--dataset-dir', required=True)
+    parser.add_argument('--epochs', type=int, default=40)
     parser.add_argument('--batch-size', type=int, default=16)
     parser.add_argument('--val-ratio', type=float, default=0.2)
-    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output-dir', default='training/runs')
-    low_memory_default = os.getenv('TRAIN_LOW_MEMORY', 'false').lower() in {'1', 'true', 'yes'}
+    parser.add_argument('--num-workers', type=int, default=int(os.getenv('TRAIN_NUM_WORKERS', '0')))
     parser.add_argument(
-        '--num-workers',
-        type=int,
-        default=int(os.getenv('TRAIN_NUM_WORKERS', '0' if low_memory_default else '2')),
+        '--pretrained',
+        action='store_true',
+        default=os.getenv('TRAIN_USE_PRETRAINED', 'true').lower() in {'1', 'true', 'yes'},
     )
     args = parser.parse_args()
 
     set_seed(args.seed)
 
-    samples = fetch_samples(args)
+    samples = fetch_samples(Path(args.dataset_dir))
     if len(samples) < 8:
         raise RuntimeError(f'可用样本仅 {len(samples)}，不足以训练')
 
-    label_ids = sorted(list({s.herb_id for s in samples}))
+    label_ids = sorted({s.herb_id for s in samples})
+    if len(label_ids) < 2:
+        raise RuntimeError('训练类别不足 2 类，无法有效训练分类模型')
     label_to_idx = {hid: i for i, hid in enumerate(label_ids)}
 
     train_samples, val_samples = build_splits(samples, args.val_ratio, args.seed)
-
-    if len({s.herb_id for s in train_samples}) < 2:
-        raise RuntimeError('训练类别不足 2 类，无法有效训练分类模型')
 
     train_tf = transforms.Compose([
         transforms.Resize((256, 256)),
@@ -206,36 +189,21 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    train_ds = HerbDataset(train_samples, label_to_idx, train_tf)
-    val_ds = HerbDataset(val_samples, label_to_idx, eval_tf)
-
     train_loader = DataLoader(
-        train_ds,
+        HerbDirDataset(train_samples, label_to_idx, train_tf),
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=max(0, int(args.num_workers)),
     )
     val_loader = DataLoader(
-        val_ds,
+        HerbDirDataset(val_samples, label_to_idx, eval_tf),
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=max(0, int(args.num_workers)),
     )
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    use_pretrained = os.getenv('TRAIN_USE_PRETRAINED', 'false').lower() in {'1', 'true', 'yes'}
-    if use_pretrained:
-        try:
-            model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        except Exception as exc:
-            print(f'[warn] 预训练权重加载失败，回退随机初始化: {exc}')
-            model = models.resnet18(weights=None)
-    else:
-        model = models.resnet18(weights=None)
-    in_features = model.fc.in_features
-    model.fc = nn.Linear(in_features, len(label_to_idx))
-    model = model.to(device)
+    device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+    model = build_model(len(label_to_idx), args.pretrained).to(device)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -291,6 +259,8 @@ def main():
                 'val_size': len(val_samples),
                 'num_classes': len(label_to_idx),
                 'device': device,
+                'dataset_dir': str(Path(args.dataset_dir).resolve()),
+                'pretrained': bool(args.pretrained),
             },
             f,
             ensure_ascii=False,

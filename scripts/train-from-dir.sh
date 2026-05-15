@@ -2,9 +2,15 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-EPOCHS="${1:-20}"
-BATCH_SIZE="${2:-16}"
-OUT_DIR="${3:-training/runs}"
+DATASET_DIR="${1:-}"
+EPOCHS="${2:-40}"
+BATCH_SIZE="${3:-16}"
+OUT_DIR="${4:-training/runs}"
+
+if [ -z "$DATASET_DIR" ]; then
+  echo "用法: bash scripts/train-from-dir.sh /path/to/dataset_root [epochs] [batch_size] [output_dir]"
+  exit 1
+fi
 
 cd "$APP_DIR"
 
@@ -13,17 +19,10 @@ if [ ! -d .venv ]; then
   exit 1
 fi
 
-if [ ! -f .env ]; then
-  echo ".env 不存在，请先配置数据库连接"
-  exit 1
-fi
-
 source .venv/bin/activate
-set -a
-source .env
-set +a
 
-python training/train_from_db.py \
+python training/train_from_dir.py \
+  --dataset-dir "$DATASET_DIR" \
   --epochs "$EPOCHS" \
   --batch-size "$BATCH_SIZE" \
   --output-dir "$OUT_DIR"
