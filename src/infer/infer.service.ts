@@ -22,6 +22,15 @@ type PythonResult = {
   predictions: PythonPrediction[];
 };
 
+type RejectionDecision = {
+  isRejected: boolean;
+  rejectionReason: string | null;
+  topConfidence: number;
+  topMargin: number | null;
+  confidenceThreshold: number;
+  marginThreshold: number;
+};
+
 @Injectable()
 export class InferService {
   constructor(
@@ -40,6 +49,65 @@ export class InferService {
 
   private resolvePredictScriptPath() {
     return join(process.cwd(), 'training', 'predict_from_model.py');
+  }
+
+  private getNumberConfig(key: string, defaultValue: number) {
+    const raw = this.config.get<string>(key);
+    if (!raw?.trim()) {
+      return defaultValue;
+    }
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : defaultValue;
+  }
+
+  private decideRejection(predictions: PythonPrediction[]): RejectionDecision {
+    const confidenceThreshold = this.getNumberConfig('INFER_CONFIDENCE_THRESHOLD', 0.45);
+    const marginThreshold = this.getNumberConfig('INFER_MARGIN_THRESHOLD', 0.08);
+    const topConfidence = predictions[0]?.confidence ?? 0;
+    const secondConfidence = predictions[1]?.confidence;
+    const topMargin = typeof secondConfidence === 'number' ? topConfidence - secondConfidence : null;
+
+    if (!predictions.length) {
+      return {
+        isRejected: true,
+        rejectionReason: '模型未返回候选类别',
+        topConfidence,
+        topMargin,
+        confidenceThreshold,
+        marginThreshold,
+      };
+    }
+
+    if (topConfidence < confidenceThreshold) {
+      return {
+        isRejected: true,
+        rejectionReason: `最高置信度低于阈值 ${confidenceThreshold}`,
+        topConfidence,
+        topMargin,
+        confidenceThreshold,
+        marginThreshold,
+      };
+    }
+
+    if (topMargin !== null && topMargin < marginThreshold) {
+      return {
+        isRejected: true,
+        rejectionReason: `Top-1 与 Top-2 置信度差值低于阈值 ${marginThreshold}`,
+        topConfidence,
+        topMargin,
+        confidenceThreshold,
+        marginThreshold,
+      };
+    }
+
+    return {
+      isRejected: false,
+      rejectionReason: null,
+      topConfidence,
+      topMargin,
+      confidenceThreshold,
+      marginThreshold,
+    };
   }
 
   private async resolveActiveRunDir() {
@@ -116,11 +184,14 @@ export class InferService {
           herb,
         };
       });
+      const rejection = this.decideRejection(parsed.predictions);
 
       return {
         runDir: parsed.runDir,
         predictions,
-        topPrediction: predictions[0] ?? null,
+        topPrediction: rejection.isRejected ? null : predictions[0] ?? null,
+        rejectedPrediction: rejection.isRejected ? predictions[0] ?? null : null,
+        rejection,
       };
     } catch (error) {
       throw new InternalServerErrorException(`推理失败: ${(error as Error).message}`);
