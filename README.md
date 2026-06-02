@@ -40,6 +40,14 @@ npm run start:dev
 - `GET /api/training/jobs`：查询训练任务
 - `PATCH /api/training/jobs/:id/status`：更新任务状态
 
+## 推理拒识参数
+推理接口会返回 Top-K 候选结果，同时根据置信度和 Top-1/Top-2 差值判断是否拒识。默认值偏保守，用于减少生活场景、非药材图片被强行归类为某个药材：
+
+- `INFER_CONFIDENCE_THRESHOLD=0.85`：最高候选低于该值时拒识。
+- `INFER_MARGIN_THRESHOLD=0.15`：最高候选与第二候选差值低于该值时拒识。
+
+如果后续加入负样本或 unknown 类并重新训练，可以结合验证集表现再下调阈值。
+
 ## 宝塔部署建议
 1. Node 版本选择 `20.x`。
 2. 在宝塔创建 MySQL 库：`herb_recognition`。

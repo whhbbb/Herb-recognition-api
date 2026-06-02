@@ -61,8 +61,8 @@ export class InferService {
   }
 
   private decideRejection(predictions: PythonPrediction[]): RejectionDecision {
-    const confidenceThreshold = this.getNumberConfig('INFER_CONFIDENCE_THRESHOLD', 0.45);
-    const marginThreshold = this.getNumberConfig('INFER_MARGIN_THRESHOLD', 0.08);
+    const confidenceThreshold = this.getNumberConfig('INFER_CONFIDENCE_THRESHOLD', 0.85);
+    const marginThreshold = this.getNumberConfig('INFER_MARGIN_THRESHOLD', 0.15);
     const topConfidence = predictions[0]?.confidence ?? 0;
     const secondConfidence = predictions[1]?.confidence;
     const topMargin = typeof secondConfidence === 'number' ? topConfidence - secondConfidence : null;
